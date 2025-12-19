@@ -80,6 +80,14 @@ resource "aws_iam_role_policy" "lambda_s3_policy" {
   })
 }
 
+# Lambda Layer
+resource "aws_lambda_layer_version" "dependencies" {
+  filename   = "layer.zip"
+  layer_name = "medlaunch-dependencies"
+
+  compatible_runtimes = ["python3.9"]
+}
+
 # Lambda Function
 resource "aws_lambda_function" "medlaunch_processor" {
   filename         = "lambda_deployment.zip"
@@ -88,6 +96,7 @@ resource "aws_lambda_function" "medlaunch_processor" {
   handler         = "lambda_handler.lambda_handler"
   runtime         = "python3.9"
   timeout         = 300
+  layers          = [aws_lambda_layer_version.dependencies.arn]
 
   depends_on = [aws_iam_role_policy.lambda_s3_policy]
 }

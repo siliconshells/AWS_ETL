@@ -26,10 +26,16 @@ jobs:
       with:
         terraform_version: 1.5.0
     
+    - name: Create Lambda layer
+      run: |
+        mkdir -p python
+        pip install -r requirements.txt -t python/
+        zip -r layer.zip python/
+        mv layer.zip terraform/
+    
     - name: Create Lambda deployment package
       run: |
-        pip install -r requirements.txt -t .
-        zip -r lambda_deployment.zip lambda_handler.py requests/ xmltodict/ boto3/ botocore/ urllib3/ certifi/ charset_normalizer/ idna/ jmespath/ python_dateutil/ s3transfer/ six/
+        zip lambda_deployment.zip lambda_handler.py
         mv lambda_deployment.zip terraform/
     
     - name: Terraform Init
