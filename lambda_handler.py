@@ -26,30 +26,45 @@ title_42 = next(title for title in titles if title["number"] == TITLE)
 
 
 def create_a_sub_requirement(text, standard_code):
-    sub = dict()
-    text = text.strip()
-    code_number = ""
+    """
+    This creates a section requirement.
 
-    sub["code"] = ""  # Just to make it come first
-    sub["text"] = text.strip()
+    :param text: The text part of the section requirement.
+    :param standard_code: The standard code to be part of the section requirement.
+    """
+    try:
+        sub = dict()
+        text = text.strip()
+        code_number = ""
 
-    while sub["text"][0] == "(" and len(sub["text"].split(" ", 1)) > 1:
-        code_number = sub["text"].split()[0].strip()
-        sub["code"] = standard_code + (
-            ""
-            if standard_code
-            and len(standard_code) > 1
-            and code_number
-            and len(code_number) > 1
-            and code_number[1] == standard_code[-2]
-            else code_number
-        )
-        sub["text"] = sub["text"].split(" ", 1)[1].strip()
+        sub["code"] = ""  # Just to make it come first
+        sub["text"] = text.strip()
 
-    return sub
+        while sub["text"][0] == "(" and len(sub["text"].split(" ", 1)) > 1:
+            code_number = sub["text"].split()[0].strip()
+            sub["code"] = standard_code + (
+                ""
+                if standard_code
+                and len(standard_code) > 1
+                and code_number
+                and len(code_number) > 1
+                and code_number[1] == standard_code[-2]
+                else code_number
+            )
+            sub["text"] = sub["text"].split(" ", 1)[1].strip()
+
+        return sub
+
+    except Exception as e:
+        print(e)
 
 
 def is_number(s):
+    """
+    Checks if a string is a number.
+
+    :param s: The string to check.
+    """
     try:
         float(s)
         return True
@@ -70,236 +85,285 @@ def process_section_content(
     section_data,
     description,
 ):
+    """
+    This is called by the process_sections function in a loop to process each section.
 
-    # Pattern hierarchies lowercase -> number -> roman -> uppercase
-    is_a_upper_pattern = re.compile(r"^\([A-Z]")
-    is_a_roman_pattern = re.compile(r"^\([ivxlcdm]")
-    is_a_lower_case_pattern = re.compile(r"^\([a-hj-uwyz]")
-    is_a_number_pattern = re.compile(r"^\([1-9]")
+    :param facility_type: This is the type of facility this section is for.
+    :param part_label: The label for the section's part.
+    :param title_number: The title number for the section.
+    :param version: The version of the section being processed.
+    :param effective_date: The effective date of the section being processed.
+    :param federal_register_citation: The federal register citation of the section.
+    :param source_url: The source url for the section.
+    :param sub_part: The sub part for the section.
+    :param sub_part_name: The name or description of the sub part of the section.
+    :param section_data: The actual section data to be processed.
+    :param description: The description of the section, in this case generated with Bedrock.
+    """
+    try:
+        # Pattern hierarchies lowercase -> number -> roman -> uppercase
+        is_a_upper_pattern = re.compile(r"^\([A-Z]")
+        is_a_roman_pattern = re.compile(r"^\([ivxlcdm]")
+        is_a_lower_case_pattern = re.compile(r"^\([a-hj-uwyz]")
+        is_a_number_pattern = re.compile(r"^\([1-9]")
 
-    section_data = json.dumps(section_data, ensure_ascii=False)
-    section_data = json.loads(section_data)
+        section_data = json.dumps(section_data, ensure_ascii=False)
+        section_data = json.loads(section_data)
 
-    section_id = section_data["@N"]
-    file_name = section_id.replace(".", "_")
-    print("Saving", file_name)
+        section_id = section_data["@N"]
+        file_name = section_id.replace(".", "_")
+        print("Saving", file_name)
 
-    section_dict = dict()
-    section_dict["regulation_id"] = (
-        section_data["@hierarchy_metadata"]
-        .split(":")[-1]
-        .replace(" ", "_")
-        .replace(".", "_")
-        .replace('"', "")
-        .replace("}", "")
-    )
-    section_dict["regulation_source"] = "cms_cop"
-    section_dict["code"] = section_id
-    section_dict["title"] = section_data["HEAD"].split(section_id, 1)[1].strip()
-    section_dict["description"] = description
-    section_dict["subpart"] = sub_part
-    section_dict["subpart_name"] = sub_part_name
-    contents_array = []
-
-    # Some Ps are just strings
-    source_array = (
-        section_data["P"]
-        if isinstance(section_data["P"], list)
-        else [section_data["P"]]
-    )
-
-    current_content_dict = dict()
-    last_number_sub_requirement = dict()
-    last_roman_sub_requirement = dict()
-    last_lower_sub_requirement = dict()
-    last_upper_sub_requirement = dict()
-    jump_from_lower_to_numeral = False
-
-    for content in source_array:
-        it_is_a_lower = isinstance(content, str) and bool(
-            is_a_lower_case_pattern.match(content.strip())
+        section_dict = dict()
+        section_dict["regulation_id"] = (
+            section_data["@hierarchy_metadata"]
+            .split(":")[-1]
+            .replace(" ", "_")
+            .replace(".", "_")
+            .replace('"', "")
+            .replace("}", "")
         )
-        if isinstance(content, dict) or it_is_a_lower:
-            if len(current_content_dict.keys()) > 0:
-                contents_array.append(current_content_dict)
-            current_content_dict = dict()
+        section_dict["regulation_source"] = "cms_cop"
+        section_dict["code"] = section_id
+        section_dict["title"] = section_data["HEAD"].split(section_id, 1)[1].strip()
+        section_dict["description"] = description
+        section_dict["subpart"] = sub_part
+        section_dict["subpart_name"] = sub_part_name
+        contents_array = []
 
-            text = ""
-            if it_is_a_lower:
-                text = content.strip()
-            else:
-                text = content["#text"].strip()
+        # Some Ps are just strings
+        source_array = (
+            section_data["P"]
+            if isinstance(section_data["P"], list)
+            else [section_data["P"]]
+        )
 
-            current_content_dict["standard_code"] = section_id + (
-                text.split(" ")[0] if text[0] == "(" else ""
+        # To store the last item in each level of the hierachy so we can use them down the line
+        current_content_dict = dict()
+        last_number_sub_requirement = dict()
+        last_roman_sub_requirement = dict()
+        last_lower_sub_requirement = dict()
+        last_upper_sub_requirement = dict()
+        jump_from_lower_to_numeral = False
+
+        for content in source_array:
+            it_is_a_lower = isinstance(content, str) and bool(
+                is_a_lower_case_pattern.match(content.strip())
             )
+            if isinstance(content, dict) or it_is_a_lower:
+                if len(current_content_dict.keys()) > 0:
+                    contents_array.append(current_content_dict)
+                current_content_dict = dict()
 
-            # Do requirement
-            if it_is_a_lower:
-                current_content_dict["requirement"] = ""
-            else:
-                current_content_dict["requirement"] = (
-                    content["I"][0].strip().strip(".")
-                    if isinstance(content["I"], list)
-                    else content["I"].strip().strip(".")
-                )
-
-            # Create the first sub requirement unit
-            last_lower_sub_requirement = create_a_sub_requirement(
-                text, current_content_dict["standard_code"]
-            )
-
-            sub_requirements = current_content_dict.get("sub_requirements", [])
-            sub_requirements.append(last_lower_sub_requirement)
-            current_content_dict["sub_requirements"] = sub_requirements
-
-            # To take care of items that have letter and number on one line
-            if len(last_lower_sub_requirement["code"]) > 2 and is_number(
-                last_lower_sub_requirement["code"][-2]
-            ):
-                jump_from_lower_to_numeral = True
-                last_number_sub_requirement = last_lower_sub_requirement
-            else:
-                jump_from_lower_to_numeral = False
-
-        else:
-            # For number sub requirements
-            if bool(is_a_number_pattern.match(content.strip())):
-                # To take care of items that have letter and number on one line
-                lower_or_main = dict()
-                if jump_from_lower_to_numeral:
-                    lower_or_main = current_content_dict
+                text = ""
+                if it_is_a_lower:
+                    text = content.strip()
                 else:
-                    lower_or_main = last_lower_sub_requirement
+                    text = content["#text"].strip()
 
-                last_number_sub_requirement = create_a_sub_requirement(
-                    content.strip(),
-                    (
-                        lower_or_main["code"]
-                        if lower_or_main.get("code", False)
-                        else lower_or_main["standard_code"]
-                    ),
+                current_content_dict["standard_code"] = section_id + (
+                    text.split(" ")[0] if text[0] == "(" else ""
                 )
 
-                sub_requirements = lower_or_main.get("sub_requirements", [])
-                sub_requirements.append(last_number_sub_requirement)
-                lower_or_main["sub_requirements"] = sub_requirements
-
-            # For roman numerals sub requirements
-            elif bool(is_a_roman_pattern.match(content.strip())):
-                last_roman_sub_requirement = create_a_sub_requirement(
-                    content.strip(), last_number_sub_requirement["code"]
-                )
-                sub_requirements = last_number_sub_requirement.get(
-                    "sub_requirements", []
-                )
-                sub_requirements.append(last_roman_sub_requirement)
-                last_number_sub_requirement["sub_requirements"] = sub_requirements
-
-            # For capital letter sub requirements
-            elif bool(is_a_upper_pattern.match(content.strip())):
-                last_upper_sub_requirement = create_a_sub_requirement(
-                    content.strip(), last_roman_sub_requirement["code"]
-                )
-                sub_requirements = last_roman_sub_requirement.get(
-                    "sub_requirements", []
-                )
-                sub_requirements.append(last_upper_sub_requirement)
-                last_roman_sub_requirement["sub_requirements"] = sub_requirements
-                pass
-
-            # For first level section
-            else:
-                sub_requirements = current_content_dict.get("sub_requirements", [])
-                last_level_2_sub_requirement = create_a_sub_requirement(
-                    content.strip(),
-                    current_content_dict.get("standard_code", section_id),
-                )
-                sub_requirements.append(last_level_2_sub_requirement)
-                if not current_content_dict.get("requirement", None):
+                # Do requirement
+                if it_is_a_lower:
                     current_content_dict["requirement"] = ""
+                else:
+                    current_content_dict["requirement"] = (
+                        content["I"][0].strip().strip(".")
+                        if isinstance(content["I"], list)
+                        else content["I"].strip().strip(".")
+                    )
+
+                # Create the first sub requirement unit
+                last_lower_sub_requirement = create_a_sub_requirement(
+                    text, current_content_dict["standard_code"]
+                )
+
+                sub_requirements = current_content_dict.get("sub_requirements", [])
+                sub_requirements.append(last_lower_sub_requirement)
                 current_content_dict["sub_requirements"] = sub_requirements
 
-    if len(current_content_dict.keys()) > 0:
-        contents_array.append(current_content_dict)
+                # To take care of items that have letter and number on one line
+                if len(last_lower_sub_requirement["code"]) > 2 and is_number(
+                    last_lower_sub_requirement["code"][-2]
+                ):
+                    jump_from_lower_to_numeral = True
+                    last_number_sub_requirement = last_lower_sub_requirement
+                else:
+                    jump_from_lower_to_numeral = False
 
-    section_dict["content"] = contents_array
+            else:
+                # For number sub requirements
+                if bool(is_a_number_pattern.match(content.strip())):
+                    # To take care of items that have letter and number on one line
+                    lower_or_main = dict()
+                    if jump_from_lower_to_numeral:
+                        lower_or_main = current_content_dict
+                    else:
+                        lower_or_main = last_lower_sub_requirement
 
-    extraction_date = (
-        datetime.now(timezone.utc)
-        .isoformat(timespec="microseconds")
-        .replace("+00:00", "Z")
-    )
-    section_dict["metadata"] = {
-        "facility_type": facility_type,
-        "part_label": part_label,
-        "title_number": title_number,
-        "version": version,
-        "effective_date": effective_date,
-        "federal_register_citation": federal_register_citation,
-        "extraction_date": extraction_date,
-        "source_url": source_url,
-    }
+                    last_number_sub_requirement = create_a_sub_requirement(
+                        content.strip(),
+                        (
+                            lower_or_main["code"]
+                            if lower_or_main.get("code", False)
+                            else lower_or_main["standard_code"]
+                        ),
+                    )
 
-    return section_dict
+                    sub_requirements = lower_or_main.get("sub_requirements", [])
+                    sub_requirements.append(last_number_sub_requirement)
+                    lower_or_main["sub_requirements"] = sub_requirements
+
+                # For roman numerals sub requirements
+                elif bool(is_a_roman_pattern.match(content.strip())):
+                    last_roman_sub_requirement = create_a_sub_requirement(
+                        content.strip(), last_number_sub_requirement["code"]
+                    )
+                    sub_requirements = last_number_sub_requirement.get(
+                        "sub_requirements", []
+                    )
+                    sub_requirements.append(last_roman_sub_requirement)
+                    last_number_sub_requirement["sub_requirements"] = sub_requirements
+
+                # For capital letter sub requirements
+                elif bool(is_a_upper_pattern.match(content.strip())):
+                    last_upper_sub_requirement = create_a_sub_requirement(
+                        content.strip(), last_roman_sub_requirement["code"]
+                    )
+                    sub_requirements = last_roman_sub_requirement.get(
+                        "sub_requirements", []
+                    )
+                    sub_requirements.append(last_upper_sub_requirement)
+                    last_roman_sub_requirement["sub_requirements"] = sub_requirements
+                    pass
+
+                # For first level section
+                else:
+                    sub_requirements = current_content_dict.get("sub_requirements", [])
+                    last_level_2_sub_requirement = create_a_sub_requirement(
+                        content.strip(),
+                        current_content_dict.get("standard_code", section_id),
+                    )
+                    sub_requirements.append(last_level_2_sub_requirement)
+                    if not current_content_dict.get("requirement", None):
+                        current_content_dict["requirement"] = ""
+                    current_content_dict["sub_requirements"] = sub_requirements
+
+        if len(current_content_dict.keys()) > 0:
+            contents_array.append(current_content_dict)
+
+        section_dict["content"] = contents_array
+
+        extraction_date = (
+            datetime.now(timezone.utc)
+            .isoformat(timespec="microseconds")
+            .replace("+00:00", "Z")
+        )
+        section_dict["metadata"] = {
+            "facility_type": facility_type,
+            "part_label": part_label,
+            "title_number": title_number,
+            "version": version,
+            "effective_date": effective_date,
+            "federal_register_citation": federal_register_citation,
+            "extraction_date": extraction_date,
+            "source_url": source_url,
+        }
+
+        return section_dict
+
+    except Exception as e:
+        print(e)
 
 
 def summarize_json(json_text):
-    prompt = f"Summarize this JSON data in one sentence. Don't mention any data source in the answer, just go to straight to the summary. Be concise and informative: {json_text}"
+    """
+    This creates a description of the section.
 
-    body = json.dumps(
-        {
-            "inputText": prompt,
-            "textGenerationConfig": {"maxTokenCount": 100, "temperature": 0.1},
-        }
-    )
+    :param json_text: The JSON data from which the summary will be derived.
+    """
+    try:
+        prompt = f"Summarize this JSON data in one sentence. Don't mention any data source in the answer, just go to straight to the summary. Be concise and informative: {json_text}"
 
-    response = bedrock.invoke_model(
-        body=body,
-        modelId="amazon.titan-text-express-v1",
-        accept="application/json",
-        contentType="application/json",
-    )
+        body = json.dumps(
+            {
+                "inputText": prompt,
+                "textGenerationConfig": {"maxTokenCount": 100, "temperature": 0.1},
+            }
+        )
 
-    result = json.loads(response["body"].read())
-    return result["results"][0]["outputText"].strip()
+        response = bedrock.invoke_model(
+            body=body,
+            modelId="amazon.titan-text-express-v1",
+            accept="application/json",
+            contentType="application/json",
+        )
+
+        result = json.loads(response["body"].read())
+        return result["results"][0]["outputText"].strip()
+
+    except Exception as e:
+        print(e)
 
 
 def process_sections(sections, sub_part, sub_part_name):
-    for section in sections:
-        # Get summary description of the data with bedrock
-        bedrock_description = summarize_json(json.dumps(section))
-        url_name = section["@N"]
+    """
+    This processes each section by looping through the sections and it's called by the handler function.
 
-        # Process
-        processed_section = process_section_content(
-            "Hospital",
-            f"Part {PART}",
-            f"{TITLE}",
-            title_42["latest_amended_on"],
-            title_42["latest_issue_date"],
-            "Not specified",
-            f"[https://www.ecfr.gov/current/title-{TITLE}/section-{url_name}](https://www.ecfr.gov/current/title-{TITLE}/section-{url_name})",
-            sub_part,
-            sub_part_name.split("—", 1)[1] if "—" in sub_part_name else sub_part_name,
-            section,
-            description=bedrock_description,
-        )
+    :param sections: The JSON sections for this section.
+    :param sub_part: The sub part letter for this section.
+    :param sub_part_name: The name of the sub part of this section.
+    """
+    try:
+        for section in sections:
+            # Get summary description of the data with bedrock
+            bedrock_description = summarize_json(json.dumps(section))
+            url_name = section["@N"]
 
-        # Save processed
-        # niaho-mapper-output/cms-cop/title-42/part-482/subpart-A/482-1.json
-        file_name = section["@N"].replace(".", "-")
-        s3_key = f"niaho-mapper-output/cms-cop/title-{TITLE}/part-{PART}/subpart-{sub_part}/{file_name}.json"
+            # Process
+            processed_section = process_section_content(
+                "Hospital",
+                f"Part {PART}",
+                f"{TITLE}",
+                title_42["latest_amended_on"],
+                title_42["latest_issue_date"],
+                "Not specified",
+                f"[https://www.ecfr.gov/current/title-{TITLE}/section-{url_name}](https://www.ecfr.gov/current/title-{TITLE}/section-{url_name})",
+                sub_part,
+                (
+                    sub_part_name.split("—", 1)[1]
+                    if "—" in sub_part_name
+                    else sub_part_name
+                ),
+                section,
+                description=bedrock_description,
+            )
 
-        s3.put_object(
-            Bucket=BUCKET_NAME,
-            Key=s3_key,
-            Body=json.dumps(processed_section, ensure_ascii=False, indent=2),
-            ContentType="application/json",
-        )
+            # Save processed
+            # niaho-mapper-output/cms-cop/title-42/part-482/subpart-A/482-1.json
+            file_name = section["@N"].replace(".", "-")
+            s3_key = f"niaho-mapper-output/cms-cop/title-{TITLE}/part-{PART}/subpart-{sub_part}/{file_name}.json"
+
+            s3.put_object(
+                Bucket=BUCKET_NAME,
+                Key=s3_key,
+                Body=json.dumps(processed_section, ensure_ascii=False, indent=2),
+                ContentType="application/json",
+            )
+
+    except Exception as e:
+        print(e)
 
 
 def lambda_handler(event, context):
+    """
+    This is the Lambda funtion's starting point. It calls all other functions necessary for execution.
+
+    :param event: This is the input payload that Lambda receives from whoever or whatever invoked it.
+    :param context: It gives runtime info about the Lambda execution itself.
+    """
     try:
         for sub_part in SUB_PARTS:
             content_url = f"https://www.ecfr.gov/api/versioner/v1/full/{title_42['up_to_date_as_of']}/title-{TITLE}.xml?part={PART}&subpart={sub_part}"
@@ -308,6 +372,7 @@ def lambda_handler(event, context):
             response = requests.get(content_url, headers=headers)
             response.raise_for_status()
 
+            # Converts XML to JSON
             data = xmltodict.parse(response.text)
 
             if "DIV6" in data.keys():
