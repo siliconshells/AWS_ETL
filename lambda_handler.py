@@ -1,6 +1,6 @@
 import json
 import boto3
-from datetime import datetime
+from datetime import datetime, timezone
 import requests
 import xmltodict
 import re
@@ -64,7 +64,6 @@ def process_section_content(
     version,
     effective_date,
     federal_register_citation,
-    extraction_date,
     source_url,
     sub_part,
     sub_part_name,
@@ -226,6 +225,11 @@ def process_section_content(
 
     section_dict["content"] = contents_array
 
+    extraction_date = (
+        datetime.now(timezone.utc)
+        .isoformat(timespec="microseconds")
+        .replace("+00:00", "Z")
+    )
     section_dict["metadata"] = {
         "facility_type": facility_type,
         "part_label": part_label,
@@ -261,21 +265,23 @@ def summarize_json(json_text):
     return result["results"][0]["outputText"].strip()
 
 
-def process_sections(sections, sub_part):
+def process_sections(sections, sub_part, sub_part_name):
     for section in sections:
+        # Get summary description of the data with bedrock
         bedrock_description = summarize_json(json.dumps(section))
+        url_name = section["@N"]
+
         # Process
         processed_section = process_section_content(
             "Hospital",
             f"Part {PART}",
             TITLE,
-            "2025-09-29",
-            "2025-09-29",
+            title_42["latest_amended_on"],
+            title_42["latest_issue_date"],
             "Not specified",
-            "2025-11-05T02:48:03.508545Z",
-            "[https://www.ecfr.gov/current/title-42/section-482.1](https://www.ecfr.gov/current/title-42/section-482.1)",
+            f"[https://www.ecfr.gov/current/title-{TITLE}/section-{url_name}](https://www.ecfr.gov/current/title-{TITLE}/section-{url_name})",
             sub_part,
-            "General Provisions",
+            sub_part_name,
             section,
             description=bedrock_description,
         )
@@ -306,9 +312,10 @@ def lambda_handler(event, context):
 
             if "DIV6" in data.keys():
                 sub_part_data = data["DIV6"]
+                sub_part_name = data["HEAD"]
                 if "DIV8" in sub_part_data.keys():
                     sections = sub_part_data["DIV8"]
-                    process_sections(sections, sub_part)
+                    process_sections(sections, sub_part, sub_part_name)
 
                 if "DIV7" in sub_part_data.keys():
                     sub_group = sub_part_data["DIV7"]
@@ -318,6 +325,7 @@ def lambda_handler(event, context):
                             process_sections(
                                 [sections] if isinstance(sections, dict) else sections,
                                 sub_part,
+                                sub_part_name,
                             )
 
         return {
