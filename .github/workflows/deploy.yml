@@ -63,5 +63,6 @@ jobs:
         aws lambda invoke \
           --function-name medlaunch-regulations-processor \
           --payload '{}' \
+          --cli-read-timeout 900 \
           response.json
         cat response.json

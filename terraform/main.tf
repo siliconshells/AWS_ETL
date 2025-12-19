@@ -125,7 +125,7 @@ resource "aws_lambda_function" "medlaunch_processor" {
   role            = aws_iam_role.lambda_role.arn
   handler         = "lambda_handler.lambda_handler"
   runtime         = "python3.9"
-  timeout         = 300
+  timeout         = 900
   layers          = [aws_lambda_layer_version.dependencies.arn]
 
   depends_on = [aws_iam_role_policy.lambda_s3_policy]
