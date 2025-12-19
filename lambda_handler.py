@@ -245,7 +245,7 @@ def process_section_content(
 
 
 def summarize_json(json_text):
-    prompt = f"Summarize this JSON data in one sentence: {json_text}"
+    prompt = f"Summarize this JSON data in one sentence. Don't mention any data source in the answer, just go to straight to the summary. Be concise and informative: {json_text}"
 
     body = json.dumps(
         {
@@ -275,12 +275,12 @@ def process_sections(sections, sub_part, sub_part_name):
         processed_section = process_section_content(
             "Hospital",
             f"Part {PART}",
-            TITLE,
+            f"{TITLE}",
             title_42["latest_amended_on"],
             title_42["latest_issue_date"],
             "Not specified",
             f"[https://www.ecfr.gov/current/title-{TITLE}/section-{url_name}](https://www.ecfr.gov/current/title-{TITLE}/section-{url_name})",
-            sub_part,
+            sub_part.split("-", 1)[1] if "-" in sub_part else sub_part,
             sub_part_name,
             section,
             description=bedrock_description,
@@ -313,6 +313,7 @@ def lambda_handler(event, context):
             if "DIV6" in data.keys():
                 sub_part_data = data["DIV6"]
                 sub_part_name = sub_part_data["HEAD"]
+
                 if "DIV8" in sub_part_data.keys():
                     sections = sub_part_data["DIV8"]
                     process_sections(sections, sub_part, sub_part_name)
