@@ -312,7 +312,7 @@ def lambda_handler(event, context):
 
             if "DIV6" in data.keys():
                 sub_part_data = data["DIV6"]
-                sub_part_name = data["HEAD"]
+                sub_part_name = sub_part_data["HEAD"]
                 if "DIV8" in sub_part_data.keys():
                     sections = sub_part_data["DIV8"]
                     process_sections(sections, sub_part, sub_part_name)
