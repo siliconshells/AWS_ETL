@@ -253,7 +253,7 @@ def summarize_json(json_text):
 
     response = bedrock.invoke_model(
         body=body,
-        modelId="anthropic.claude-v2",
+        modelId="amazon.titan-text-express-v1",
         accept="application/json",
         contentType="application/json",
     )

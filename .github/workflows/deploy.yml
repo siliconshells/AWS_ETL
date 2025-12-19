@@ -46,6 +46,10 @@ jobs:
       working-directory: terraform
       run: terraform plan
     
+    - name: Delete existing Lambda function
+      run: |
+        aws lambda delete-function --function-name medlaunch-regulations-processor || true
+    
     - name: Terraform Apply
       working-directory: terraform
       run: |

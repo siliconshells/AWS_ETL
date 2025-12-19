@@ -104,7 +104,7 @@ resource "aws_iam_role_policy" "lambda_s3_policy" {
         Action = [
           "bedrock:InvokeModel"
         ]
-        Resource = "arn:aws:bedrock:*::foundation-model/anthropic.claude-v2"
+        Resource = "arn:aws:bedrock:*::foundation-model/amazon.titan-text-express-v1"
       }
     ]
   })
