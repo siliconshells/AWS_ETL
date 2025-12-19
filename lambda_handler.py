@@ -1,13 +1,18 @@
-import requests
 import json
+import boto3
+from datetime import datetime
+import requests
 import xmltodict
-from pathlib import Path
 import re
 
+s3 = boto3.client("s3")
+bedrock = boto3.client("bedrock-runtime")
+BUCKET_NAME = "medlaunch-regulations-data"
 
 TITLE = 42
 PART = 482
 SUB_PARTS = ["A", "B", "C", "D", "E"]
+
 
 titles_url = "https://www.ecfr.gov/api/versioner/v1/titles.json"
 headers = {"Accept": "application/json"}
@@ -64,6 +69,7 @@ def process_section_content(
     sub_part,
     sub_part_name,
     section_data,
+    description,
 ):
 
     # Pattern hierarchies lowercase -> number -> roman -> uppercase
@@ -91,7 +97,7 @@ def process_section_content(
     section_dict["regulation_source"] = "cms_cop"
     section_dict["code"] = section_id
     section_dict["title"] = section_data["HEAD"].split(section_id, 1)[1].strip()
-    section_dict["description"] = "FIND THIS"
+    section_dict["description"] = description
     section_dict["subpart"] = sub_part
     section_dict["subpart_name"] = sub_part_name
     contents_array = []
@@ -234,64 +240,96 @@ def process_section_content(
     return section_dict
 
 
-def process_section(sections):
+def summarize_json(json_text):
+    prompt = f"Summarize this JSON data in one sentence: {json_text}"
+
+    body = json.dumps(
+        {
+            "prompt": f"\n\nHuman: {prompt}\n\nAssistant:",
+            "max_tokens_to_sample": 100,
+            "temperature": 0.1,
+        }
+    )
+
+    response = bedrock.invoke_model(
+        body=body,
+        modelId="anthropic.claude-v2",
+        accept="application/json",
+        contentType="application/json",
+    )
+
+    result = json.loads(response["body"].read())
+    return result["completion"].strip()
+
+
+def process_sections(sections, sub_part):
     for section in sections:
-
-        file_name = section["@N"].replace(".", "_")
-        print("Saving", file_name)
-
-        # Save original
-        path = Path(f"original/{file_name}.json").resolve()
-        with open(path, "w") as f:
-            json.dump(section, f, indent=2)
-
+        bedrock_description = summarize_json(json.dumps(section))
         # Process
         processed_section = process_section_content(
             "Hospital",
-            "Part 482",
-            "42",
+            f"Part {PART}",
+            TITLE,
             "2025-09-29",
             "2025-09-29",
             "Not specified",
             "2025-11-05T02:48:03.508545Z",
             "[https://www.ecfr.gov/current/title-42/section-482.1](https://www.ecfr.gov/current/title-42/section-482.1)",
-            "A",
+            sub_part,
             "General Provisions",
             section,
+            description=bedrock_description,
         )
 
         # Save processed
-        path = Path(f"processed/{file_name}.json").resolve()
-        with open(path, "w") as f:
-            json.dump(processed_section, f, indent=2)
+        # niaho-mapper-output/cms-cop/title-42/part-482/subpart-A/482-1.json
+        file_name = section["@N"].replace(".", "-")
+        s3_key = f"niaho-mapper-output/cms-cop/title-{TITLE}/part-{PART}/subpart-{sub_part}/{file_name}.json"
+
+        s3.put_object(
+            Bucket=BUCKET_NAME,
+            Key=s3_key,
+            Body=json.dumps(processed_section, ensure_ascii=False, indent=2),
+            ContentType="application/json",
+        )
 
 
-# Now get the data
-def main():
-    for sub_part in SUB_PARTS:
-        content_url = f"https://www.ecfr.gov/api/versioner/v1/full/{title_42['up_to_date_as_of']}/title-{TITLE}.xml?part={PART}&subpart={sub_part}"
-        headers = {"Accept": "application/xml"}
+def lambda_handler(event, context):
+    try:
+        for sub_part in SUB_PARTS:
+            content_url = f"https://www.ecfr.gov/api/versioner/v1/full/{title_42['up_to_date_as_of']}/title-{TITLE}.xml?part={PART}&subpart={sub_part}"
+            headers = {"Accept": "application/xml"}
 
-        response = requests.get(content_url, headers=headers)
-        response.raise_for_status()
+            response = requests.get(content_url, headers=headers)
+            response.raise_for_status()
 
-        data = xmltodict.parse(response.text)
+            data = xmltodict.parse(response.text)
 
-        if "DIV6" in data.keys():
-            sub_part_data = data["DIV6"]
-            if "DIV8" in sub_part_data.keys():
-                sections = sub_part_data["DIV8"]
-                process_section(sections)
+            if "DIV6" in data.keys():
+                sub_part_data = data["DIV6"]
+                if "DIV8" in sub_part_data.keys():
+                    sections = sub_part_data["DIV8"]
+                    process_sections(sections, sub_part)
 
-            if "DIV7" in sub_part_data.keys():
-                sub_group = sub_part_data["DIV7"]
-                for idx in range(len(sub_group)):
-                    if "DIV8" in sub_group[idx].keys():
-                        sections = sub_group[idx]["DIV8"]
-                        process_section(
-                            [sections] if isinstance(sections, dict) else sections
-                        )
+                if "DIV7" in sub_part_data.keys():
+                    sub_group = sub_part_data["DIV7"]
+                    for idx in range(len(sub_group)):
+                        if "DIV8" in sub_group[idx].keys():
+                            sections = sub_group[idx]["DIV8"]
+                            process_sections(
+                                [sections] if isinstance(sections, dict) else sections,
+                                sub_part,
+                            )
 
+        return {
+            "statusCode": 200,
+            "body": json.dumps(
+                {
+                    "message": "Data processed and saved successfully",
+                    "s3_location": f"s3://{BUCKET_NAME}",
+                }
+            ),
+        }
 
-if __name__ == "__main__":
-    main()
+    except Exception as e:
+        return {"statusCode": 500, "body": json.dumps({"error": str(e)})}

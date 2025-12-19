@@ -1,0 +1,53 @@
+name: Deploy Lambda and S3
+
+on:
+  push:
+    branches: [ main ]
+
+env:
+  AWS_REGION: us-east-1
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v2
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+    
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v2
+      with:
+        terraform_version: 1.5.0
+    
+    - name: Create Lambda deployment package
+      run: |
+        pip install -r requirements.txt -t .
+        zip -r lambda_deployment.zip lambda_handler.py requests/ xmltodict/ boto3/ botocore/ urllib3/ certifi/ charset_normalizer/ idna/ jmespath/ python_dateutil/ s3transfer/ six/
+        mv lambda_deployment.zip terraform/
+    
+    - name: Terraform Init
+      working-directory: terraform
+      run: terraform init
+    
+    - name: Terraform Plan
+      working-directory: terraform
+      run: terraform plan
+    
+    - name: Terraform Apply
+      working-directory: terraform
+      run: terraform apply -auto-approve
+    
+    - name: Invoke Lambda Function
+      run: |
+        aws lambda invoke \
+          --function-name medlaunch-regulations-processor \
+          --payload '{}' \
+          response.json
+        cat response.json
