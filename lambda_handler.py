@@ -280,8 +280,8 @@ def process_sections(sections, sub_part, sub_part_name):
             title_42["latest_issue_date"],
             "Not specified",
             f"[https://www.ecfr.gov/current/title-{TITLE}/section-{url_name}](https://www.ecfr.gov/current/title-{TITLE}/section-{url_name})",
-            sub_part.split("—", 1)[1] if "—" in sub_part else sub_part,
-            sub_part_name,
+            sub_part,
+            sub_part_name.split("—", 1)[1] if "—" in sub_part else sub_part,
             section,
             description=bedrock_description,
         )
