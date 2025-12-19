@@ -48,7 +48,11 @@ jobs:
     
     - name: Terraform Apply
       working-directory: terraform
-      run: terraform apply -auto-approve
+      run: |
+        terraform apply -auto-approve || true
+        terraform import aws_s3_bucket.regulations_data medlaunch-regulations-data || true
+        terraform import aws_iam_role.lambda_role medlaunch-lambda-role || true
+        terraform apply -auto-approve
     
     - name: Invoke Lambda Function
       run: |

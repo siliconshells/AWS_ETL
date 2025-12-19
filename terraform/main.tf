@@ -15,9 +15,35 @@ variable "aws_region" {
   default = "us-east-1"
 }
 
+# Check if resources exist
+data "aws_s3_bucket" "existing_bucket" {
+  bucket = "medlaunch-regulations-data"
+  count  = 1
+}
+
+data "aws_iam_role" "existing_role" {
+  name  = "medlaunch-lambda-role"
+  count = 1
+}
+
+# Import existing resources if they exist
+import {
+  to = aws_s3_bucket.regulations_data
+  id = "medlaunch-regulations-data"
+}
+
+import {
+  to = aws_iam_role.lambda_role
+  id = "medlaunch-lambda-role"
+}
+
 # S3 Bucket
 resource "aws_s3_bucket" "regulations_data" {
   bucket = "medlaunch-regulations-data"
+  
+  lifecycle {
+    ignore_changes = [bucket]
+  }
 }
 
 resource "aws_s3_bucket_versioning" "regulations_data" {
@@ -43,6 +69,10 @@ resource "aws_iam_role" "lambda_role" {
       }
     ]
   })
+  
+  lifecycle {
+    ignore_changes = [name]
+  }
 }
 
 resource "aws_iam_role_policy" "lambda_s3_policy" {
