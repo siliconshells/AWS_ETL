@@ -245,9 +245,8 @@ def summarize_json(json_text):
 
     body = json.dumps(
         {
-            "prompt": f"\n\nHuman: {prompt}\n\nAssistant:",
-            "max_tokens_to_sample": 100,
-            "temperature": 0.1,
+            "inputText": prompt,
+            "textGenerationConfig": {"maxTokenCount": 100, "temperature": 0.1},
         }
     )
 
@@ -259,7 +258,7 @@ def summarize_json(json_text):
     )
 
     result = json.loads(response["body"].read())
-    return result["completion"].strip()
+    return result["results"][0]["outputText"].strip()
 
 
 def process_sections(sections, sub_part):
